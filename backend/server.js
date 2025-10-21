@@ -23,6 +23,9 @@ const { protect } = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy so secure cookies work behind the ELB/load balancer
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -59,6 +62,8 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    // For cross-site cookies (frontend on different origin), set sameSite=None in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
@@ -97,6 +102,11 @@ app.use('/api/rti', protect, rtiRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/upload', protect, uploadRoutes);
 app.use('/api/export', protect, exportRoutes);
+
+// Root route for Elastic Beanstalk / health checks
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'RTI Assistant API is running' });
+});
 
 // 404 handler
 app.use('*', (req, res) => {
