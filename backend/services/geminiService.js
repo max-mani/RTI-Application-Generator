@@ -18,6 +18,44 @@ class GeminiService {
     this.model = this.genAI.getGenerativeModel({ model: this.modelName });
   }
 
+  // List available models (try SDK first, then fallback to REST call)
+  async listAvailableModels() {
+    try {
+      // If SDK exposes a listModels method, use it
+      if (typeof this.genAI.listModels === 'function') {
+        const res = await this.genAI.listModels();
+        // SDK may return { models: [ { name: 'models/...' } ] }
+        const models = res?.models?.map(m => m.name) || [];
+        return { success: true, models };
+      }
+
+      // Fallback: call the REST endpoint directly
+      if (!this.apiKey) {
+        return { success: false, error: 'No API key available to list models' };
+      }
+
+      const resp = await fetch('https://generativelanguage.googleapis.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        return { success: false, error: `Model list request failed: ${resp.status} ${text}` };
+      }
+
+      const json = await resp.json();
+      const models = json?.models?.map(m => m.name) || [];
+      return { success: true, models };
+    } catch (error) {
+      console.error('Error listing available models:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Generate RTI application from text query
   async generateRTIFromText(query, options = {}) {
     try {
