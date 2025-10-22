@@ -9,8 +9,13 @@ class GeminiService {
       throw new Error('GEMINI_API_KEY is required');
     }
     
+    // Allow overriding the model via environment variable in case the default
+    // model name is not available for the API version used by the SDK.
+    // Example values: 'models/text-bison-001', 'models/gemini-1.5', etc.
+    this.modelName = process.env.GEMINI_MODEL || 'models/text-bison-001';
+
     this.genAI = new GoogleGenerativeAI(this.apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    this.model = this.genAI.getGenerativeModel({ model: this.modelName });
   }
 
   // Generate RTI application from text query
@@ -32,7 +37,7 @@ class GeminiService {
         userDetails
       });
 
-      const result = await this.model.generateContent(prompt);
+  const result = await this.model.generateContent(prompt);
       const response = await result.response;
       const generatedText = response.text();
 
@@ -45,7 +50,7 @@ class GeminiService {
           location,
           language,
           category,
-          model: 'gemini-1.5-flash',
+          model: this.modelName,
           timestamp: new Date()
         }
       };
@@ -150,6 +155,46 @@ class GeminiService {
         error: error.message,
         text: null
       };
+    }
+  }
+
+  // Detect best matching department from a user query
+  async detectDepartment(query, candidates = []) {
+    try {
+      const prompt = `
+        You are an assistant that maps a citizen's RTI query to the most appropriate government department.
+        If a candidate list is provided, you MUST choose the SINGLE best department strictly from that list.
+        If there is no good match, choose the closest and set confidence to low.
+
+        Return STRICT JSON only in this shape (no markdown, no prose):
+        {
+          "department": "string",
+          "confidence": "high|medium|low",
+          "reason": "short explanation"
+        }
+
+        Candidates: ${Array.isArray(candidates) && candidates.length > 0 ? JSON.stringify(candidates) : '[]'}
+        Query: "${query}"
+      `
+
+      const result = await this.model.generateContent(prompt)
+      const response = await result.response
+      const text = response.text()
+      const parsed = JSON.parse(text)
+
+      if (!parsed || !parsed.department) {
+        throw new Error('Invalid department JSON')
+      }
+
+      return { success: true, ...parsed }
+    } catch (error) {
+      console.error('Error detecting department:', error)
+      return {
+        success: false,
+        department: 'Other',
+        confidence: 'low',
+        reason: 'Fallback due to detection error'
+      }
     }
   }
 
@@ -339,8 +384,8 @@ class GeminiService {
         generatedText,
         metadata: {
           templateUsed: true,
-          variables,
-          model: 'gemini-1.5-flash',
+            variables,
+            model: this.modelName,
           timestamp: new Date()
         }
       };
@@ -384,7 +429,7 @@ class GeminiService {
         improvedText,
         improvements,
         metadata: {
-          model: 'gemini-1.5-flash',
+            model: this.modelName,
           timestamp: new Date()
         }
       };
