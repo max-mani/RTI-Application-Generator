@@ -16,6 +16,22 @@ class GeminiService {
 
     this.genAI = new GoogleGenerativeAI(this.apiKey);
     this.model = this.genAI.getGenerativeModel({ model: this.modelName });
+    // Non-blocking attempt to list models and log results for debugging.
+    // This helps surface model availability/auth issues in EB logs without
+    // blocking startup. We intentionally don't throw here.
+    (async () => {
+      try {
+        console.log('Attempting to list models for debugging (not blocking startup)...');
+        const listRes = await this.listAvailableModels();
+        if (listRes.success) {
+          console.log('Available generative models (sample):', listRes.models.slice(0, 20));
+        } else {
+          console.warn('Could not list models during startup:', listRes.error);
+        }
+      } catch (err) {
+        console.error('Unexpected error while listing models at startup:', err);
+      }
+    })();
   }
 
   // List available models (try SDK first, then fallback to REST call)
