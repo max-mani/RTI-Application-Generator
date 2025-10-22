@@ -7,6 +7,20 @@ const { uploadAudio, handleUploadError, getFileInfo } = require('../middleware/u
 const { checkOwnership } = require('../middleware/auth');
 
 const router = express.Router();
+const { optionalAuth } = require('../middleware/auth');
+// Temporary debug route to list available models from Gemini service
+// GET /api/rti/debug/models
+router.get('/debug/models', optionalAuth, async (req, res, next) => {
+  try {
+    const result = await geminiService.listAvailableModels();
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+    return res.status(200).json({ success: true, models: result.models });
+  } catch (error) {
+    next(error);
+  }
+});
 // @desc    Get clarification questions for missing details
 // @route   POST /api/rti/clarify
 // @access  Private
@@ -23,6 +37,27 @@ router.post('/clarify', [
     const { query, language = 'english' } = req.body;
     const result = await geminiService.generateClarificationQuestions(query, { language });
     return res.status(200).json({ success: true, data: result.questions });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// @desc    Detect best matching department from query (Gemini)
+// @route   POST /api/rti/detect-department
+// @access  Private
+router.post('/detect-department', [
+  body('query').trim().isLength({ min: 5 }).withMessage('Query is required'),
+  body('candidates').optional().isArray(),
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { query, candidates = [] } = req.body;
+    const result = await geminiService.detectDepartment(query, candidates);
+    return res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -654,3 +689,4 @@ router.get('/stats', async (req, res, next) => {
 });
 
 module.exports = router;
+
