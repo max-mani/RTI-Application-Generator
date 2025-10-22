@@ -34,10 +34,11 @@ class GeminiService {
         return { success: false, error: 'No API key available to list models' };
       }
 
-      const resp = await fetch('https://generativelanguage.googleapis.com/v1/models', {
+      // Use API key as query parameter for unauthenticated REST access
+      const url = `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(this.apiKey)}`;
+      const resp = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         }
       });
